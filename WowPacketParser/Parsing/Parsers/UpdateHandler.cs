@@ -48,6 +48,18 @@ namespace WowPacketParser.Parsing.Parsers
                             obj.ChangedUpdateFieldsList.Add(updates);
                         }
 
+                        if (guid.HasEntry() && guid.GetObjectType() == ObjectType.Unit)
+                        {
+                            List<string> lines = new List<string>();
+                            lines.Add("UpdateType: Values");
+                            foreach (var data in updates)
+                                lines.Add("Block Value " + UpdateFields.GetUpdateFieldName(data.Key,"UnitField") + ": " + data.Value.Int32Value + "/" + data.Value.SingleValue);
+
+                            if (packet.SniffFileInfo.Stuffing.upObjPackets.ContainsKey(guid))
+                                packet.SniffFileInfo.Stuffing.upObjPackets[guid].upObjPackets.Enqueue(new UpdateObjectPacket(packet.Time, packet.Number, lines));
+                            else
+                                packet.SniffFileInfo.Stuffing.upObjPackets.TryAdd(guid, new UpdateObjectPackets(new UpdateObjectPacket(packet.Time, packet.Number, lines)));
+                        }
                         break;
                     }
                     case "Movement":
@@ -68,7 +80,7 @@ namespace WowPacketParser.Parsing.Parsers
                     case "NearObjects":
                     case "DestroyObjects":
                     {
-                        ReadObjectsBlock(ref packet, i);
+                        ReadObjectsBlock(ref packet, i, typeString);
                         break;
                     }
                 }
@@ -82,17 +94,46 @@ namespace WowPacketParser.Parsing.Parsers
             var updates = ReadValuesUpdateBlock(ref packet, objType, index);
 
             var obj = new WoWObject {Type = objType, Movement = moves, UpdateFields = updates, Map = map, Area = WorldStateHandler.CurrentAreaId, PhaseMask = (uint) MovementHandler.CurrentPhaseMask};
+            if (guid.HasEntry() && guid.GetObjectType() == ObjectType.Unit)            
+            {
+                List<string> lines = new List<string>();
+                lines.Add("UpdateType: Values");
+                foreach (var data in updates)
+                    lines.Add("Block Value " + UpdateFields.GetUpdateFieldName(data.Key, "UnitField") + ": " + data.Value.Int32Value + "/" + data.Value.SingleValue);
+            
+                if (packet.SniffFileInfo.Stuffing.upObjPackets.ContainsKey(guid))
+                    packet.SniffFileInfo.Stuffing.upObjPackets[guid].upObjPackets.Enqueue(new UpdateObjectPacket(packet.Time, packet.Number, lines));
+                else
+                    packet.SniffFileInfo.Stuffing.upObjPackets.TryAdd(guid, new UpdateObjectPackets(new UpdateObjectPacket(packet.Time, packet.Number, lines)));
+            }
+
             packet.SniffFileInfo.Stuffing.Objects.TryAdd(guid, obj);
 
             if (guid.HasEntry() && (objType == ObjectType.Unit || objType == ObjectType.GameObject))
                 packet.AddSniffData(Utilities.ObjectTypeToStore(objType), (int)guid.GetEntry(), "SPAWN");
         }
 
-        private static void ReadObjectsBlock(ref Packet packet, int index)
+        public static void ReadObjectsBlock(ref Packet packet, int index, string typeString)
         {
             var objCount = packet.ReadInt32("Object Count", index);
+
+            List<string> lines = new List<string>();
+            lines.Add("UpdateType: " + typeString);
+
             for (var j = 0; j < objCount; j++)
-                packet.ReadPackedGuid("Object GUID", index, j);
+            {
+                Guid guid = packet.ReadPackedGuid("Object GUID", index, j);
+                if (guid.HasEntry() && guid.GetObjectType() == ObjectType.Unit)
+                {
+                    lines.Add("ObjectGuid: " + guid.GetLow());
+
+                    if (packet.SniffFileInfo.Stuffing.upObjPackets.ContainsKey(guid))
+                        packet.SniffFileInfo.Stuffing.upObjPackets[guid].upObjPackets.Enqueue(new UpdateObjectPacket(packet.Time, packet.Number, lines));
+                    else
+                        packet.SniffFileInfo.Stuffing.upObjPackets.TryAdd(guid, new UpdateObjectPackets(new UpdateObjectPacket(packet.Time, packet.Number, lines)));
+                }
+            }
+
         }
 
         private static Dictionary<int, UpdateField> ReadValuesUpdateBlock(ref Packet packet, ObjectType type, int index)
@@ -175,10 +216,15 @@ namespace WowPacketParser.Parsing.Parsers
 
         private static MovementInfo ReadMovementUpdateBlock(ref Packet packet, Guid guid, int index)
         {
+            var lines = new List<string>();
+            lines.Add("MovementUpdateBlock");
+
             var moveInfo = new MovementInfo();
 
             var flagsTypeCode = ClientVersion.AddedInVersion(ClientVersionBuild.V3_1_0_9767) ? TypeCode.UInt16 : TypeCode.Byte;
             var flags = packet.ReadEnum<UpdateFlag>("[" + index + "] Update Flags", flagsTypeCode);
+
+            lines.Add("[" + index + "] Update Flags");
 
             if (flags.HasAnyFlag(UpdateFlag.Living))
             {
@@ -196,6 +242,7 @@ namespace WowPacketParser.Parsing.Parsers
                 {
                     var speedType = (SpeedType)(i + speedShift);
                     var speed = packet.ReadSingle("["+ index + "] " + speedType + " Speed");
+                    lines.Add("[" + index + "] " + speedType + " Speed: " + speed);
 
                     switch (speedType)
                     {
@@ -221,49 +268,65 @@ namespace WowPacketParser.Parsing.Parsers
                     if (ClientVersion.AddedInVersion(ClientVersionBuild.V4_2_2_14545))
                     {
                         var splineFlags422 = packet.ReadEnum<SplineFlag422>("Spline Flags", TypeCode.Int32, index);
-                        if (splineFlags422.HasAnyFlag(SplineFlag422.FinalOrientation))
+                        lines.Add("Spline Flags: " + splineFlags422.ToString());
+
+                        if (splineFlags422.HasAnyFlag(SplineFlag422.FinalTarget))
                         {
-                            packet.ReadSingle("Final Spline Orientation", index);
+                            Misc.Guid targetGuid = packet.ReadGuid("Final Spline Target GUID", index);
+                            lines.Add("Final Spline Target GUID: " + targetGuid.GetLow());
                         }
-                        else
+                        else if (splineFlags422.HasAnyFlag(SplineFlag422.FinalOrientation))
                         {
-                            if (splineFlags422.HasAnyFlag(SplineFlag422.FinalTarget))
-                                packet.ReadGuid("Final Spline Target GUID", index);
-                            else if (splineFlags422.HasAnyFlag(SplineFlag422.FinalPoint))
-                                packet.ReadVector3("Final Spline Coords", index);
+                            float orientation = packet.ReadSingle("Final Spline Orientation", index);
+                            lines.Add("Final Spline Orientation: " + orientation);
+                        }
+                        else if (splineFlags422.HasAnyFlag(SplineFlag422.FinalPoint))
+                        {
+                            Vector3 finalCords = packet.ReadVector3("Final Spline Coords", index);
+                            lines.Add("Final Spline Coords: " + finalCords.ToString());
                         }
                     }
                     else
                     {
                         var splineFlags = packet.ReadEnum<SplineFlag>("Spline Flags", TypeCode.Int32, index);
+                        lines.Add("Spline Flags: " + splineFlags.ToString());
                         if (splineFlags.HasAnyFlag(SplineFlag.FinalTarget))
-                            packet.ReadGuid("Final Spline Target GUID", index);
+                        {
+                            Guid targetGuid = packet.ReadGuid("Final Spline Target GUID", index);
+                            lines.Add("Final Spline Target GUID: " + targetGuid.GetLow());
+                        }
                         else if (splineFlags.HasAnyFlag(SplineFlag.FinalOrientation))
-                            packet.ReadSingle("Final Spline Orientation", index);
+                        {
+                            float orientation = packet.ReadSingle("Final Spline Orientation", index);
+                            lines.Add("Final Spline Orientation: " + orientation);
+                        }
                         else if (splineFlags.HasAnyFlag(SplineFlag.FinalPoint))
-                            packet.ReadVector3("Final Spline Coords", index);
+                        {
+                            Vector3 finalCords = packet.ReadVector3("Final Spline Coords", index);
+                            lines.Add("Final Spline Coords: " + finalCords.ToString());
+                        }
                     }
 
-                    packet.ReadInt32("Spline Time", index);
-                    packet.ReadInt32("Spline Full Time", index);
+                    lines.Add("Spline Time: " + packet.ReadInt32("Spline Time", index));
+                    lines.Add("Spline Full Time: " + packet.ReadInt32("Spline Full Time", index));
                     packet.ReadInt32("Spline ID", index);
 
                     if (ClientVersion.AddedInVersion(ClientVersionBuild.V3_1_0_9767))
                     {
-                        packet.ReadSingle("Spline Duration Multiplier", index);
-                        packet.ReadSingle("Spline Duration Multiplier Next", index);
-                        packet.ReadSingle("Spline Vertical Acceleration", index);
-                        packet.ReadInt32("Spline Start Time", index);
+                        lines.Add("Spline Duration Multiplier: " + packet.ReadSingle("Spline Duration Multiplier", index));
+                        lines.Add("Spline Duration Multiplier Next: " + packet.ReadSingle("Spline Duration Multiplier Next", index));
+                        lines.Add("Spline Vertical Acceleration" + packet.ReadSingle("Spline Vertical Acceleration", index));
+                        lines.Add("Spline Start Time " + packet.ReadInt32("Spline Start Time", index));
                     }
 
                     var splineCount = packet.ReadInt32();
                     for (var i = 0; i < splineCount; i++)
-                        packet.ReadVector3("Spline Waypoint", index, i);
+                        lines.Add("[" + i + "] Spline Waypoint: " + packet.ReadVector3("Spline Waypoint", index, i).ToString());
 
                     if (ClientVersion.AddedInVersion(ClientVersionBuild.V3_1_0_9767))
-                        packet.ReadEnum<SplineMode>("Spline Mode", TypeCode.Byte, index);
+                        lines.Add("Spline Mode: " + packet.ReadEnum<SplineMode>("Spline Mode", TypeCode.Byte, index).ToString());
 
-                    packet.ReadVector3("Spline Endpoint", index);
+                    lines.Add("Spline Endpoint: " + packet.ReadVector3("Spline Endpoint", index).ToString());
                 }
             }
             else // !UpdateFlag.Living
@@ -296,15 +359,16 @@ namespace WowPacketParser.Parsing.Parsers
             }
 
             if (flags.HasAnyFlag(UpdateFlag.AttackingTarget))
-                packet.ReadPackedGuid("Target GUID", index);
+                lines.Add("Target GUID: " + packet.ReadPackedGuid("Target GUID", index));
 
             if (flags.HasAnyFlag(UpdateFlag.Transport))
-                packet.ReadInt32("Transport unk timer", index);
+                lines.Add("Transport Movement Time (ms): " + packet.ReadInt32("Transport Movement Time (ms)", index));
 
             if (flags.HasAnyFlag(UpdateFlag.Vehicle))
             {
                 moveInfo.VehicleId = packet.ReadUInt32("[" + index + "] Vehicle ID");
-                packet.ReadSingle("Vehicle Orientation", index);
+                lines.Add("Vehicle ID : " + moveInfo.VehicleId);
+                lines.Add("Vehicle Orientation: " + packet.ReadSingle("Vehicle Orientation", index));
             }
 
             if (ClientVersion.AddedInVersion(ClientVersionBuild.V4_2_2_14545))
@@ -336,6 +400,14 @@ namespace WowPacketParser.Parsing.Parsers
                 moveInfo.VehicleId = 0;
                 moveInfo.WalkSpeed = 0;
                 moveInfo.RunSpeed = 0;
+            }
+
+            if (guid.HasEntry() && guid.GetObjectType() == ObjectType.Unit)
+            {
+                if (packet.SniffFileInfo.Stuffing.upObjPackets.ContainsKey(guid))
+                    packet.SniffFileInfo.Stuffing.upObjPackets[guid].upObjPackets.Enqueue(new UpdateObjectPacket(packet.Time, packet.Number, lines));
+                else
+                    packet.SniffFileInfo.Stuffing.upObjPackets.TryAdd(guid, new UpdateObjectPackets(new UpdateObjectPacket(packet.Time, packet.Number, lines)));
             }
 
             return moveInfo;

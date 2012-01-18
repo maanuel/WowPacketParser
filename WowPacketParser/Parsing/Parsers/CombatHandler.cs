@@ -1,6 +1,7 @@
 using System;
 using WowPacketParser.Enums;
 using WowPacketParser.Misc;
+using WowPacketParser.Store.Objects;
 
 namespace WowPacketParser.Parsing.Parsers
 {
@@ -124,16 +125,34 @@ namespace WowPacketParser.Parsing.Parsers
         [Parser(Opcode.SMSG_ATTACKSTART)]
         public static void HandleAttackStartStart(Packet packet)
         {
-            packet.ReadGuid("GUID");
+            Misc.Guid creature = packet.ReadGuid("GUID");
             packet.ReadGuid("Victim GUID");
+
+            if (creature.HasEntry() && creature.GetObjectType() == ObjectType.Unit)
+            {
+                CombatState combatState = new CombatState(packet.Time, packet.Number, "Attack Start");
+                if (packet.SniffFileInfo.Stuffing.combatStates.ContainsKey(creature))
+                    packet.SniffFileInfo.Stuffing.combatStates[creature].combateStates.Enqueue(combatState);
+                else
+                    packet.SniffFileInfo.Stuffing.combatStates.TryAdd(creature, new CombateStates(combatState));
+            }
         }
 
         [Parser(Opcode.SMSG_ATTACKSTOP)]
         public static void HandleAttackStartStop(Packet packet)
         {
-            packet.ReadPackedGuid("GUID");
+            Misc.Guid creature = packet.ReadPackedGuid("GUID");
             packet.ReadPackedGuid("Victim GUID");
             packet.ReadInt32("Unk int"); // Has something to do with facing?
+
+            if (creature.GetEntry() != 0)
+            {
+                CombatState combatState = new CombatState(packet.Time, packet.Number, "Attack Stop");
+                if (packet.SniffFileInfo.Stuffing.combatStates.ContainsKey(creature))
+                    packet.SniffFileInfo.Stuffing.combatStates[creature].combateStates.Enqueue(combatState);
+                else
+                    packet.SniffFileInfo.Stuffing.combatStates.TryAdd(creature, new CombateStates(combatState));
+            }
         }
 
         [Parser(Opcode.SMSG_ATTACKERSTATEUPDATE)]

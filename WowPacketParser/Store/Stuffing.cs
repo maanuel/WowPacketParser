@@ -74,5 +74,25 @@ namespace WowPacketParser.Store
         // Names
         public readonly ConcurrentDictionary<uint, ObjectName> ObjectNames =
             new ConcurrentDictionary<uint, ObjectName>();
+
+        // Spell cast
+        public readonly ConcurrentDictionary<Misc.Guid, SpellCast> SpellCasts =
+            new ConcurrentDictionary<Misc.Guid, SpellCast>();
+
+        // Waypoints
+        public readonly ConcurrentDictionary<Misc.Guid, Store.Objects.MovementPackets> Waypoints =
+            new ConcurrentDictionary<Misc.Guid, Store.Objects.MovementPackets>();
+
+        // CombatStates
+        public readonly ConcurrentDictionary<Misc.Guid, CombateStates> combatStates =
+            new ConcurrentDictionary<Misc.Guid, CombateStates>();
+
+        // Auras
+        public readonly ConcurrentDictionary<Misc.Guid, AuraPackets> auraPackets =
+            new ConcurrentDictionary<Misc.Guid, AuraPackets>();
+
+        // Updates
+        public readonly ConcurrentDictionary<Misc.Guid, UpdateObjectPackets> upObjPackets =
+            new ConcurrentDictionary<Misc.Guid, UpdateObjectPackets>();
     }
 }

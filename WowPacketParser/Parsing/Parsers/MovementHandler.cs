@@ -155,7 +155,7 @@ namespace WowPacketParser.Parsing.Parsers
         [Parser(Opcode.SMSG_MONSTER_MOVE_TRANSPORT)]
         public static void HandleMonsterMove(Packet packet)
         {
-            packet.ReadPackedGuid("GUID");
+            Guid mover = packet.ReadPackedGuid("GUID");
 
             if (packet.Opcode == Opcodes.GetOpcode(Opcode.SMSG_MONSTER_MOVE_TRANSPORT))
             {
@@ -171,7 +171,7 @@ namespace WowPacketParser.Parsing.Parsers
             var pos = packet.ReadVector3("Position");
 
             packet.ReadInt32("Move Ticks");
-
+            
             var type = packet.ReadEnum<SplineType>("Spline Type", TypeCode.Byte);
 
             switch (type)
@@ -226,15 +226,17 @@ namespace WowPacketParser.Parsing.Parsers
             }
 
             var waypoints = packet.ReadInt32("Waypoints");
-
+            var waypointsList = new List<string>();
             if (flags.HasAnyFlag(SplineFlag.Flying | SplineFlag.CatmullRom))
             {
                 for (var i = 0; i < waypoints; i++)
-                    packet.ReadVector3("Waypoint", i);
+                    waypointsList.Add(packet.ReadVector3("[" + i + "] Waypoint - Flying Or CatmullRom", i).ToString());
             }
             else
             {
                 var newpos = packet.ReadVector3("Waypoint Endpoint");
+
+                waypointsList.Add("New position: " + newpos.ToString());
 
                 var mid = new Vector3();
                 mid.X = (pos.X + newpos.X) * 0.5f;
@@ -248,8 +250,21 @@ namespace WowPacketParser.Parsing.Parsers
                     vec.Y += mid.Y;
                     vec.Z += mid.Z;
 
-                    packet.Writer.WriteLine("[" + i + "]" + " Waypoint: " + vec);
+                    string output = "[" + i + "]" + " Waypoint: " + vec;
+                    packet.Writer.WriteLine(output);
+                    waypointsList.Add(output);
                 }
+            }
+
+            // Is this check really needed?
+            if (mover.HasEntry() && mover.GetObjectType() == ObjectType.Unit)
+            {
+                MovementPacket movPacket = new MovementPacket(packet.Number, packet.Time, waypointsList);
+
+                if (packet.SniffFileInfo.Stuffing.Waypoints.ContainsKey(mover))
+                    packet.SniffFileInfo.Stuffing.Waypoints[mover].movementPackets.Enqueue(movPacket);
+                else
+                    packet.SniffFileInfo.Stuffing.Waypoints.TryAdd(mover, new MovementPackets(movPacket));
             }
         }
 

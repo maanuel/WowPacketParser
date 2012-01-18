@@ -296,6 +296,8 @@
     <Compile Include="Misc\Filters.cs" />
     <Compile Include="Parsing\Parsers\CombatLogHandler.cs" />
     <Compile Include="Parsing\Parsers\TestHandler.cs" />
+    <Compile Include="Store\Objects\AuraPacket.cs" />
+    <Compile Include="Store\Objects\CombatState.cs" />
     <Compile Include="Store\Objects\Aura.cs" />
     <Compile Include="Store\Objects\ObjectName.cs" />
     <Compile Include="Store\Objects\QuestPOI.cs" />
@@ -306,6 +308,7 @@
     <Compile Include="Store\Objects\QuestPOIPoint.cs" />
     <Compile Include="Store\Objects\SniffData.cs" />
     <Compile Include="Store\Objects\SniffFileInfo.cs" />
+    <Compile Include="Store\Objects\SpellCast.cs" />
     <Compile Include="Store\Objects\StartAction.cs" />
     <Compile Include="Store\Objects\GameObjectTemplate.cs" />
     <Compile Include="Store\Objects\Gossip.cs" />
@@ -333,7 +336,9 @@
     <Compile Include="Misc\StoreGetters.cs" />
     <Compile Include="Misc\UpdateField.cs" />
     <Compile Include="Store\Objects\UnitTemplate.cs" />
+    <Compile Include="Store\Objects\UpdateObjectPacket.cs" />
     <Compile Include="Store\Objects\VendorItem.cs" />
+    <Compile Include="Store\Objects\Waypoints.cs" />
     <Compile Include="Store\Objects\WoWObject.cs" />
     <Compile Include="Misc\Packet.cs" />
     <Compile Include="Misc\Utilities.cs" />

@@ -4,9 +4,11 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using WowPacketParser.Enums;
 using WowPacketParser.Enums.Version;
 using WowPacketParser.Misc;
+using WowPacketParser.Store.Objects;
 
 namespace WowPacketParser.Store.SQL
 {
@@ -818,6 +820,186 @@ namespace WowPacketParser.Store.SQL
             }
 
             return new QueryBuilder.SQLInsert(tableName, rows, true).Build();
+        }
+
+        public string SpellCasts()
+        {
+            if (_stuffing.SpellCasts.IsEmpty)
+                return string.Empty;
+
+            const string tableName = "SpellCasts";
+
+            var rows = new List<QueryBuilder.SQLInsertRow>();
+            foreach (var data in _stuffing.SpellCasts)
+            {
+                var row = new QueryBuilder.SQLInsertRow();
+
+                row.AddValue("fileId", "FILE_ID"); // this is renamed by the web application
+                row.AddValue("packetNumber", data.Value.number);
+                row.AddValue("time", Utilities.GetUnixTimeFromDateTime(data.Value.time));
+                row.AddValue("guid", data.Key.GetLow());
+                row.AddValue("creatureId", data.Key.GetEntry());
+                row.AddValue("spellId", data.Value.spellId);
+                row.AddValue("targetFlag", data.Value.targetFlag.ToString());
+
+                string targets = "<ul>";
+                int count = 0;
+                foreach (Misc.Guid target in data.Value.hitTargets)
+                    targets += " <li> " +"[" + (count++) + "] " + "Hit Target: " + target.GetLow() + " </li> ";
+                foreach (Misc.Guid target in data.Value.missTargets)
+                    targets += " <li> " + "[" + (count++) + "] " + "Miss Target: " + target.GetLow() + " </li> ";
+
+                targets += "</ul>";
+                row.AddValue("targets", targets);
+
+                rows.Add(row);
+            }
+
+            return new QueryBuilder.SQLInsert(tableName, rows, true).Build();
+        }
+
+        public string Waypoints()
+        {
+            if (_stuffing.Waypoints.IsEmpty)
+                return string.Empty;
+
+            const string tableName = "Waypoints";
+
+            //var rows = new List<QueryBuilder.SQLInsertRow>();
+            var result = new StringBuilder();
+            foreach (var data in _stuffing.Waypoints)
+            {
+                var rows = new List<QueryBuilder.SQLInsertRow>();
+                MovementPacket movPacket;
+
+                while (data.Value.movementPackets.TryDequeue(out movPacket))
+                {
+                    var row = new QueryBuilder.SQLInsertRow();
+
+                    row.AddValue("fileId", "FILE_ID"); // this is renamed by the web application
+                    row.AddValue("packetNumber", movPacket.number);
+                    row.AddValue("time", Utilities.GetUnixTimeFromDateTime(movPacket.time));
+                    row.AddValue("guid", data.Key.GetLow());
+                    row.AddValue("creatureId", data.Key.GetEntry());
+
+                    string waypoints = "<ul>";
+                    foreach (string wp in movPacket.waypoints)
+                        waypoints += "<li>" + wp + " </li> ";
+
+                    waypoints += "</ul>";
+                    row.AddValue("waypoints", waypoints);
+                    rows.Add(row);
+                    result.Append(new QueryBuilder.SQLInsert(tableName, rows, true).Build());
+                }
+            }
+
+            return result.ToString();
+        }
+
+        public string CombatStates()
+        {
+            if (_stuffing.combatStates.IsEmpty)
+                return string.Empty;
+
+            const string tableName = "CombatStates";
+
+            var rows = new List<QueryBuilder.SQLInsertRow>();
+            foreach (var data in _stuffing.combatStates)
+            {
+                CombatState combatState;
+
+                while (data.Value.combateStates.TryDequeue(out combatState))
+                {
+                    var row = new QueryBuilder.SQLInsertRow();
+
+                    row.AddValue("fileId", "FILE_ID"); // this is renamed by the web application
+                    row.AddValue("packetNumber", combatState.number);
+                    row.AddValue("time", Utilities.GetUnixTimeFromDateTime(combatState.time));
+                    row.AddValue("guid", data.Key.GetLow());
+                    row.AddValue("creatureId", data.Key.GetEntry());
+                    row.AddValue("state", combatState.state);
+
+                    rows.Add(row);
+                }
+            }
+
+            return new QueryBuilder.SQLInsert(tableName, rows, true).Build();
+        }
+
+        public string Auras()
+        {
+            if (_stuffing.auraPackets.IsEmpty)
+                return string.Empty;
+
+            const string tableName = "Auras";
+
+            var rows = new List<QueryBuilder.SQLInsertRow>();
+            foreach (var data in _stuffing.auraPackets)
+            {
+                AuraPacket auraPacket;
+
+                while (data.Value.auraPackets.TryDequeue(out auraPacket))
+                {
+                    var row = new QueryBuilder.SQLInsertRow();
+
+                    row.AddValue("fileId", "FILE_ID"); // this is renamed by the web application
+                    row.AddValue("packetNumber", auraPacket.number);
+                    row.AddValue("time", Utilities.GetUnixTimeFromDateTime(auraPacket.time));
+
+                    // it's the target
+                    row.AddValue("guid", data.Key.GetLow());
+                    row.AddValue("creatureId", data.Key.GetEntry());
+
+                    row.AddValue("casterGuid", auraPacket.aura.CasterGuid.GetLow());
+                    row.AddValue("spellId", auraPacket.aura.SpellId);
+                    row.AddValue("slot", auraPacket.aura.Slot);
+                    row.AddValue("auraFlags", auraPacket.aura.AuraFlags.ToString());
+                    row.AddValue("level", auraPacket.aura.Level);
+                    row.AddValue("charges", auraPacket.aura.Charges);
+                    row.AddValue("maxDuration", auraPacket.aura.MaxDuration);
+                    row.AddValue("duration", auraPacket.aura.Duration);
+                    rows.Add(row);
+                }
+            }
+
+            return new QueryBuilder.SQLInsert(tableName, rows, true).Build();
+        }
+
+        public string Updates()
+        {
+            if (_stuffing.upObjPackets.IsEmpty)
+                return string.Empty;
+
+            const string tableName = "Updates";
+            var result = new StringBuilder();
+            foreach (var data in _stuffing.upObjPackets)
+            {
+                var rows = new List<QueryBuilder.SQLInsertRow>();
+                UpdateObjectPacket upObjPacket;
+
+                while (data.Value.upObjPackets.TryDequeue(out upObjPacket))
+                {
+                    var row = new QueryBuilder.SQLInsertRow();
+
+                    row.AddValue("fileId", "FILE_ID"); // this is renamed by the web application
+                    row.AddValue("packetNumber", upObjPacket.number);
+                    row.AddValue("time", Utilities.GetUnixTimeFromDateTime(upObjPacket.time));
+                    row.AddValue("guid", data.Key.GetLow());
+                    row.AddValue("creatureId", data.Key.GetEntry());
+
+                    string output = "<ul>";
+                    foreach (string j in upObjPacket.lines)
+                        output += "<li>" + j + " </li>";
+                    output += "</ul>";
+                    row.AddValue("update", output);
+
+                    rows.Add(row);
+                }
+
+                result.Append(new QueryBuilder.SQLInsert(tableName, rows, true).Build());
+            }
+
+            return result.ToString();
         }
     }
 }

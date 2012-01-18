@@ -171,13 +171,21 @@ namespace WowPacketParser.Parsing.Parsers
         [Parser(Opcode.SMSG_AURA_UPDATE)]
         public static void HandleAuraUpdate(Packet packet)
         {
-            packet.ReadPackedGuid("GUID");
+            Guid guid = packet.ReadPackedGuid("GUID");
 
             /*Aura aura = null; */
             while (packet.CanRead())
             {
                 /*aura =*/
-                ReadAuraUpdateBlock(ref packet);
+                Aura aura = ReadAuraUpdateBlock(ref packet);
+
+                if (aura != null && guid.HasEntry() && guid.GetObjectType() == ObjectType.Unit)
+                {
+                    if (packet.SniffFileInfo.Stuffing.auraPackets.ContainsKey(guid))
+                        packet.SniffFileInfo.Stuffing.auraPackets[guid].auraPackets.Enqueue(new AuraPacket(packet.Time, packet.Number, aura));
+                    else
+                        packet.SniffFileInfo.Stuffing.auraPackets.TryAdd(guid, new AuraPackets(new AuraPacket(packet.Time, packet.Number, aura)));
+                }
                 // TODO: Add this aura to a list of objects (searching by guid)
             }
         }
@@ -234,7 +242,7 @@ namespace WowPacketParser.Parsing.Parsers
         {
             bool isSpellGo = packet.Opcode == Opcodes.GetOpcode(Opcode.SMSG_SPELL_GO);
 
-            packet.ReadPackedGuid("Caster GUID");
+            Guid caster = packet.ReadPackedGuid("Caster GUID");
             packet.ReadPackedGuid("Caster Unit GUID");
 
             if (ClientVersion.AddedInVersion(ClientVersionBuild.V3_0_2_9056))
@@ -249,6 +257,8 @@ namespace WowPacketParser.Parsing.Parsers
             var flags = packet.ReadEnum<CastFlag>("Cast Flags", flagsTypeCode);
 
             packet.ReadUInt32("Time");
+            List<Guid> hitTargets = new List<Guid>();
+            List<Guid> missTargets = new List<Guid>();
 
             if (isSpellGo)
             {
@@ -256,14 +266,14 @@ namespace WowPacketParser.Parsing.Parsers
                     packet.ReadInt32("unk");
                 var hitCount = packet.ReadByte("Hit Count");
                 for (var i = 0; i < hitCount; i++)
-                    packet.ReadGuid("Hit GUID", i);
+                    hitTargets.Add(packet.ReadGuid("Hit GUID", i));
 
                 var missCount = packet.ReadByte("Miss Count");
                 for (var i = 0; i < missCount; i++)
                 {
                     var missGuid = packet.ReadGuid("Miss GUID", i);
                     packet.Writer.WriteLine("Miss GUID " + i + ": " + missGuid);
-
+                    missTargets.Add(missGuid);
                     var missType = packet.ReadEnum<SpellMissType>("Miss Type", TypeCode.Byte, i);
                     if (missType != SpellMissType.Reflect)
                         continue;
@@ -361,7 +371,11 @@ namespace WowPacketParser.Parsing.Parsers
             }
 
             if (isSpellGo)
+            {
                 packet.AddSniffData(StoreNameType.Spell, spellId, "SPELL_GO");
+                if (caster.HasEntry() && caster.GetObjectType() == ObjectType.Unit)
+                    packet.SniffFileInfo.Stuffing.SpellCasts.TryAdd(caster, new SpellCast(packet.Time, packet.Number, spellId, targetFlags, hitTargets, missTargets));
+            }
         }
 
         [Parser(Opcode.SMSG_LEARNED_SPELL)]

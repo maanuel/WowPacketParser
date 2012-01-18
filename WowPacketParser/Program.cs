@@ -131,10 +131,19 @@ namespace WowPacketParser
             if (sqlOutput.HasAnyFlag(SQLOutputFlags.ObjectNames))
                 store.WriteData(builder.ObjectNames());
 
-            if (sqlOutput.HasAnyFlag(SQLOutputFlags.CreatureEquip))
+            if (sqlOutput.HasFlag(SQLOutputFlags.CreatureEquip))
                 store.WriteData(builder.CreatureEquip());
 
-            Trace.WriteLine(string.Format("{0}: Saved file to '{1}'", prefix, fileName));
+            if (sqlOutput.HasFlag(SQLOutputFlags.SniffViewer))
+            {
+                store.WriteData(builder.SpellCasts());
+                store.WriteData(builder.Waypoints());
+                store.WriteData(builder.CombatStates());
+                store.WriteData(builder.Auras());
+                store.WriteData(builder.Updates());
+            }
+
+            Console.WriteLine("{0}: Saved file to '{1}'", prefix, fileName);
             store.WriteToFile();
         }
 
