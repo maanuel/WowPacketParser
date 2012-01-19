@@ -827,7 +827,7 @@ namespace WowPacketParser.Store.SQL
             if (_stuffing.SpellCasts.IsEmpty)
                 return string.Empty;
 
-            const string tableName = "SpellCasts";
+            const string tableName = "spellcasts";
 
             var rows = new List<QueryBuilder.SQLInsertRow>();
             foreach (var data in _stuffing.SpellCasts)
@@ -863,7 +863,7 @@ namespace WowPacketParser.Store.SQL
             if (_stuffing.Waypoints.IsEmpty)
                 return string.Empty;
 
-            const string tableName = "Waypoints";
+            const string tableName = "waypoints";
 
             //var rows = new List<QueryBuilder.SQLInsertRow>();
             var result = new StringBuilder();
@@ -901,7 +901,7 @@ namespace WowPacketParser.Store.SQL
             if (_stuffing.combatStates.IsEmpty)
                 return string.Empty;
 
-            const string tableName = "CombatStates";
+            const string tableName = "combatstates";
 
             var rows = new List<QueryBuilder.SQLInsertRow>();
             foreach (var data in _stuffing.combatStates)
@@ -931,7 +931,7 @@ namespace WowPacketParser.Store.SQL
             if (_stuffing.auraPackets.IsEmpty)
                 return string.Empty;
 
-            const string tableName = "Auras";
+            const string tableName = "auras";
 
             var rows = new List<QueryBuilder.SQLInsertRow>();
             foreach (var data in _stuffing.auraPackets)
@@ -970,7 +970,7 @@ namespace WowPacketParser.Store.SQL
             if (_stuffing.upObjPackets.IsEmpty)
                 return string.Empty;
 
-            const string tableName = "Updates";
+            const string tableName = "updates";
             var result = new StringBuilder();
             foreach (var data in _stuffing.upObjPackets)
             {
